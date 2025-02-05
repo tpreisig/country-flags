@@ -1,26 +1,77 @@
-from tkinter import *
-import ttkbootstrap as tbp
+import tkinter as tk
+from tkinter import ttk, PhotoImage
 import requests
+from PIL import Image, ImageTk
+import json
+import os
 
+# Let's a directory for flags if it doesn't exist
+if not os.path.exists('flags'):
+    os.makedirs('flags')
 
-def get_joke():
-    response = requests.get("https://api.chucknorris.io/jokes/random")
-    response.raise_for_status()
-    data = response.json()
-    print(data['value'])
-    joke = data['value']
-    canvas.itemconfig(joke_text, text=joke)
+def fetch_flag(country_code):
+    url = f"https://flagcdn.com/256x192/{country_code.lower()}.png"
+    file_path = f'flags/{country_code}.png'
+    if not os.path.exists(file_path):
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(file_path, 'wb') as f:
+                f.write(response.content)
+    return file_path
 
-window = tbp.Window(themename="cyborg")
-window.title("Chuck Norris Jokes")
-window.config(padx=50, pady=50)
-canvas = Canvas(window, width=450, height=414)
-label = tbp.Label(text="Chuck Norris Jokes", font=("Montserrat", 30, "bold"), bootstyle="primary")
-label.pack(pady=0)
-joke_text = canvas.create_text(225, 207, text='', width=400, font=("Monserrat", 24, "italic"), fill="#299AD0")
-canvas.pack()
-button = tbp.Button(window, text="Get Joke", command=get_joke, bootstyle="primary, outline")
-button.pack()
+def display_flags(root, countries):
+    # Frame for holding the flags with scrollbars
+    flag_frame = ttk.Frame(root)
+    flag_frame.pack(fill=tk.BOTH, expand=True)
 
-window.mainloop()
+    canvas = tk.Canvas(flag_frame)
+    scrollbar = ttk.Scrollbar(flag_frame, orient="vertical", command=canvas.yview)
+    scrollable_frame = ttk.Frame(canvas)
 
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(
+            scrollregion=canvas.bbox("all")
+        )
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # Constants for flag size
+    FLAG_WIDTH = 256
+    FLAG_HEIGHT = 192  # Maintain 4:3 aspect ratio
+
+    for idx, country in enumerate(countries):
+        flag_path = fetch_flag(country)
+        img = Image.open(flag_path)
+        
+        # Resize image to maintain aspect ratio but fit within specified dimensions
+        img_resized = img.resize((FLAG_WIDTH, FLAG_HEIGHT), Image.LANCZOS)
+        photo = ImageTk.PhotoImage(img_resized)
+        
+        label = ttk.Label(scrollable_frame, image=photo)
+        label.image = photo  # keep a reference!
+        label.grid(row=idx // 5, column=idx % 5, padx=5, pady=5, sticky="nsew")  # Wrap every 5 flags
+
+    # Configure grid to expand equally
+    for i in range(5):
+        scrollable_frame.grid_columnconfigure(i, weight=1)
+
+def main():
+    root = tk.Tk()
+    root.title("Country Flags")
+    with open('./data/country_codes.json') as f:
+        countries = json.load(f)
+        print(f"Flags for all country codes:\n{countries}")
+    display_flags(root, countries)
+    
+    # Set window size
+    root.geometry("1400x400")
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
